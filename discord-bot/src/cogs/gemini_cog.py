@@ -15,8 +15,9 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-DEBUG = False  # Set this to True to enable debug mode
-DEBUG_GUILD_ID = 1333162585981456495  # Replace with your specific Discord server ID
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+DEBUG_GUILD_ID = os.getenv('DEBUG_GUILD_ID', 123456789012345678)
+logger.info(f"DEBUG: {DEBUG}, DEBUG_GUILD_ID: {DEBUG_GUILD_ID}")
 
 INSTRUCTIONS = {
     'freeform': "You are a helpful assistant. Please provide detailed and accurate responses. Keep your responses short like you are texting someone.",
@@ -89,24 +90,21 @@ class GeminiCog(commands.Cog):
         document_links = [(attachment.url, attachment.content_type) for attachment in ctx.message.attachments if attachment.content_type and (attachment.content_type.startswith('application/pdf') or attachment.content_type.startswith('text/plain'))]
 
         if image_links:
-            await self.gemini_image(ctx, prompt=prompt)
-            return
+            return await self.gemini_image(ctx, prompt=prompt)
         if video_links:
-            await self.gemini_video(ctx, prompt=prompt)
-            return
+            return await self.gemini_video(ctx, prompt=prompt)
         if document_links:
-            await self.gemini_document(ctx, prompt=prompt)
-            return
+            return await self.gemini_document(ctx, prompt=prompt)
 
         # If no attachments, proceed with text prompt
-        prompt = prompt or INSTRUCTIONS['greeting']
+        prompt = prompt or "Hello, how are you today?"
         chat_session = self.model.start_chat()
         custom_instructions = f"{INSTRUCTIONS['freeform']} {prompt[:100]}"
         text_response = []
         responses = chat_session.send_message(custom_instructions, stream=True)
         for chunk in responses:
             text_response.append(chunk.text)
-        return f"{''.join(text_response)}"
+        return ''.join(text_response)
 
     @commands.command(name='ai')
     async def gemini(self, ctx, *, prompt: str = None):
@@ -114,6 +112,7 @@ class GeminiCog(commands.Cog):
         logger.info(f"{ctx.author} called the gemini command with prompt: {prompt}")
         if not self.check_debug_mode(ctx):
             return
+
         try:
             text_response = await self.process_and_generate_response(ctx, prompt)
             await ctx.send(text_response)
@@ -126,7 +125,7 @@ class GeminiCog(commands.Cog):
         logger.info(f"{ctx.author} called the ai-voice command with prompt: {prompt}")
         try:
             await self.join(ctx)
-            text_response = await self.process_and_generate_response(ctx, f"Keep your response short and sweet. Act like you are talking to a person. {prompt}")
+            text_response = await self.process_and_generate_response(ctx, prompt)
             tts = gTTS(text_response, tld='ca', lang='en')
             tts.save('gemini.mp3')
             source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio('gemini.mp3'))
@@ -160,6 +159,7 @@ class GeminiCog(commands.Cog):
 
     async def gemini_image(self, ctx, *, prompt: str = None):
         """Interacts with the Gemini Vertex AI API for images"""
+        logger.info(f"{ctx.author} called the gemini_image function with prompt: {prompt}")
         if ctx.message is None:
             # Fetch the last message in the channel
             async for msg in ctx.channel.history(limit=2):
@@ -168,23 +168,16 @@ class GeminiCog(commands.Cog):
                     break
 
         if ctx.message is None:
-            await ctx.send("No message found to extract image links from.")
-            return
-
-        # Print out all attachment URLs for testing
-        attachment_urls = [attachment for attachment in ctx.message.attachments]
-        print("Attachment URLs:", attachment_urls)
+            return "No message found to extract image links from."
 
         # Check for image attachments using MIME type
         image_links = [(attachment.url, attachment.content_type) for attachment in ctx.message.attachments if attachment.content_type and attachment.content_type.startswith('image/')]
 
         if not image_links:
-            await ctx.send("No image links found in attachments.")
-            return
+            return "No image links found in attachments."
 
         image_link = image_links[0]
 
-        print(f'ctx.author: {ctx.author}, command is: {ctx.command}')
         try:
             detect_safe_search_uri(image_link[0])
             image_file = Part.from_uri(image_link[0], image_link[1])
@@ -193,12 +186,13 @@ class GeminiCog(commands.Cog):
             else:
                 custom_instructions = INSTRUCTIONS['image']
             response = self.model.generate_content([image_file, custom_instructions]).text
-            await ctx.send(f"Response: {response}")
+            return response
         except Exception as e:
-            await ctx.send(f"Error: {str(e)}")
+            return f"Error: {str(e)}"
 
     async def gemini_video(self, ctx, *, prompt: str = None):
         """Interacts with the Gemini Vertex AI API for videos"""
+        logger.info(f"{ctx.author} called the gemini_video function with prompt: {prompt}")
         if ctx.message is None:
             # Fetch the last message in the channel
             async for msg in ctx.channel.history(limit=2):
@@ -207,19 +201,16 @@ class GeminiCog(commands.Cog):
                     break
 
         if ctx.message is None:
-            await ctx.send("No message found to extract video links from.")
-            return
+            return "No message found to extract video links from."
 
         # Check for video attachments using MIME type
         video_links = [(attachment.url, attachment.content_type) for attachment in ctx.message.attachments if attachment.content_type and attachment.content_type.startswith('video/')]
 
         if not video_links:
-            await ctx.send("No video links found in attachments.")
-            return
+            return "No video links found in attachments."
 
         video_link = video_links[0]
 
-        print(f'ctx.author: {ctx.author}, command is: {ctx.command}')
         try:
             # Download the video file
             async with aiohttp.ClientSession() as session:
@@ -229,8 +220,7 @@ class GeminiCog(commands.Cog):
                         with open(video_path, 'wb') as f:
                             f.write(await response.read())
                     else:
-                        await ctx.send("Failed to download the video.")
-                        return
+                        return "Failed to download the video."
 
             # Upload the video file to Google Cloud Storage
             storage_client = storage.Client()
@@ -246,14 +236,15 @@ class GeminiCog(commands.Cog):
             else:
                 custom_instructions = INSTRUCTIONS['video']
             response = self.model.generate_content([video_file, custom_instructions]).text
-            await ctx.send(f"Response: {response}")
 
             # Clean up the downloaded file and delete from GCS
             os.remove(video_path)
             blob.delete()
+
+            return response
         except Exception as e:
-            await ctx.send(f"Error: {str(e)}")
-    
+            return f"Error: {str(e)}"
+
     async def gemini_document(self, ctx, *, prompt: str = None):
         """Interacts with the Gemini Vertex AI API for PDF and TXT files"""
         logger.info(f"{ctx.author} called the gemini_document function with prompt: {prompt}")
@@ -265,23 +256,16 @@ class GeminiCog(commands.Cog):
                     break
 
         if ctx.message is None:
-            await ctx.send("No message found to extract document links from.")
-            return
-
-        # Print out all attachment URLs for testing
-        attachment_urls = [attachment for attachment in ctx.message.attachments]
-        print("Attachment URLs:", attachment_urls)
+            return "No message found to extract document links from."
 
         # Check for PDF and TXT attachments using MIME type
         document_links = [(attachment.url, attachment.content_type) for attachment in ctx.message.attachments if attachment.content_type and (attachment.content_type.startswith('application/pdf') or attachment.content_type.startswith('text/plain'))]
 
         if not document_links:
-            await ctx.send("No PDF or TXT links found in attachments.")
-            return
-        print(f'document_links: {document_links}')
+            return "No PDF or TXT links found in attachments."
+
         document_link = document_links[0]
 
-        print(f'ctx.author: {ctx.author}, command is: {ctx.command}')
         try:
             document_file = Part.from_uri(document_link[0], document_link[1])
             if prompt:
@@ -289,10 +273,9 @@ class GeminiCog(commands.Cog):
             else:
                 custom_instructions = INSTRUCTIONS['document']
             response = self.model.generate_content([document_file, custom_instructions]).text
-            await ctx.send(f"Response: {response}")
-
+            return response
         except Exception as e:
-            await ctx.send(f"Error: {str(e)}")
+            return f"Error: {str(e)}"
 
     #@commands.command(name='imgen')
     async def imgen(self, ctx, *, prompt: str = None):
