@@ -32,6 +32,8 @@ INSTRUCTIONS = {
     'narrate': ("provide a script to narrate what you see as if it was a play-by-play commentary of a sports game."),
     'roast': ("You are a mean person. You are roasting someone. Be as mean as you can be. Don't hold back. If you detect a game in the image or video, roast the game too."),
     'playsong': ("You are a DJ. You are playing a song for someone. Based on the prompt, play a song that fits the mood. Only respond with a song name and artist."),
+    'greeting': ("You are a friendly assistant. Greet the user like they are a new friend."),
+    'meme': ("You are a meme generator. Generate the best meme you can think of."),
 }
 
 class GeminiCog(commands.Cog):
@@ -97,14 +99,14 @@ class GeminiCog(commands.Cog):
             return
 
         # If no attachments, proceed with text prompt
-        prompt = prompt or "Hello, how are you today?"
+        prompt = prompt or INSTRUCTIONS['greeting']
         chat_session = self.model.start_chat()
         custom_instructions = f"{INSTRUCTIONS['freeform']} {prompt[:100]}"
         text_response = []
         responses = chat_session.send_message(custom_instructions, stream=True)
         for chunk in responses:
             text_response.append(chunk.text)
-        return f"Response: {''.join(text_response)}"
+        return f"{''.join(text_response)}"
 
     @commands.command(name='ai')
     async def gemini(self, ctx, *, prompt: str = None):
@@ -113,7 +115,8 @@ class GeminiCog(commands.Cog):
         if not self.check_debug_mode(ctx):
             return
         try:
-            await ctx.send(self.process_and_generate_response(ctx, prompt))
+            text_response = await self.process_and_generate_response(ctx, prompt)
+            await ctx.send(text_response)
         except Exception as e:
             await ctx.send(f"Error: {str(e)}")
 
@@ -123,11 +126,11 @@ class GeminiCog(commands.Cog):
         logger.info(f"{ctx.author} called the ai-voice command with prompt: {prompt}")
         try:
             await self.join(ctx)
-            text_response = await self.process_and_generate_response(ctx, prompt)
-            tts = gTTS(''.join(text_response), tld='ca', lang='en')
+            text_response = await self.process_and_generate_response(ctx, f"Keep your response short and sweet. Act like you are talking to a person. {prompt}")
+            tts = gTTS(text_response, tld='ca', lang='en')
             tts.save('gemini.mp3')
             source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio('gemini.mp3'))
-            await ctx.send(f"Response: {''.join(text_response)}")
+            await ctx.send(text_response)
             ctx.voice_client.play(source, after=lambda e: logger.error(f'Player error: {e}') if e else None)
             while ctx.voice_client.is_playing():
                 await asyncio.sleep(1)
