@@ -61,7 +61,7 @@ class GeminiConvCog(commands.Cog):
         status = "started" if self.chat_session_active else "stopped"
         await ctx.send(f"Chat session {status}.")
     
-    @commands.command(name='ai-stop')
+    @commands.command(name='ai-chat-stop')
     async def gemini_stop(self, ctx):
         """Stops the bot from speaking"""
         logger.info(f"{ctx.author} called the ai-stop command")
