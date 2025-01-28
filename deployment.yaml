@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gemini-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      containers:
+      - name: gemini-bot
+        # Here "us-west2" is your Artifact Registry location
+        # Make sure to REPLACE "copper-eye-378909" with your Google Cloud project ID.
+        image: us-west2-docker.pkg.dev/nightbotcommands/discord-bot-repo/gemini-bot-image:latest
+        # This app listens on port 8080 for web traffic by default.
