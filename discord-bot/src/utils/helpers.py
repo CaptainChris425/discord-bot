@@ -82,7 +82,7 @@ async def gemini_image(ctx, model, prompt: str = None):
         detect_safe_search_uri(image_link[0])
         image_file = Part.from_uri(image_link[0], image_link[1])
         if prompt:
-            custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} {prompt[:100]}")
+            custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} { prompt}")
         else:
             custom_instructions = INSTRUCTIONS['image']
         response = model.generate_content([image_file, custom_instructions]).text
@@ -132,7 +132,7 @@ async def gemini_video(ctx, model, bucket_name, prompt: str = None):
         # Use the GCS URI with Vertex AI
         video_file = Part.from_uri(gcs_uri, video_link[1])
         if prompt:
-            custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} {prompt[:100]}")
+            custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} { prompt}")
         else:
             custom_instructions = INSTRUCTIONS['video']
         response = model.generate_content([video_file, custom_instructions]).text
@@ -169,7 +169,7 @@ async def gemini_document(ctx, model, prompt: str = None):
     try:
         document_file = Part.from_uri(document_link[0], document_link[1])
         if prompt:
-            custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} {prompt[:100]}")
+            custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} {prompt}")
         else:
             custom_instructions = INSTRUCTIONS['document']
         response = model.generate_content([document_file, custom_instructions]).text
@@ -194,7 +194,7 @@ async def process_and_generate_response(ctx, model, bucket_name, prompt: str = N
     # If no attachments, proceed with text prompt
     prompt = prompt or INSTRUCTIONS['greeting']
     chat_session = model.start_chat()
-    custom_instructions = f"{INSTRUCTIONS['freeform']} {prompt[:100]}"
+    custom_instructions = f"{INSTRUCTIONS['freeform']} { prompt}"
     text_response = []
     responses = chat_session.send_message(custom_instructions, stream=True)
     for chunk in responses:
