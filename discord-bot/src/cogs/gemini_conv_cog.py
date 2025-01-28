@@ -35,6 +35,7 @@ class GeminiConvCog(commands.Cog):
         self.conversation_history = []
         self.chat_session_active = False
         self.chat_voice_active = False
+        self.reset_flag = False
 
     def check_debug_mode(self, ctx):
         if DEBUG and ctx.guild.id != DEBUG_GUILD_ID:
@@ -59,6 +60,15 @@ class GeminiConvCog(commands.Cog):
         self.chat_session_active = not self.chat_session_active
         status = "started" if self.chat_session_active else "stopped"
         await ctx.send(f"Chat session {status}.")
+    
+    @commands.command(name='ai-stop')
+    async def gemini_stop(self, ctx):
+        """Stops the bot from speaking"""
+        logger.info(f"{ctx.author} called the ai-stop command")
+        if not self.check_debug_mode(ctx):
+            return
+        if ctx.voice_client.is_playing():
+            ctx.voice_client.stop()
 
     @commands.command(name='ai-chat-status')
     async def chat_session_status(self, ctx):
@@ -81,6 +91,17 @@ class GeminiConvCog(commands.Cog):
         status = "started" if self.chat_voice_active else "stopped"
         await ctx.send(f"Chat voice session {status}. Join a voice channel to begin.")
 
+    @commands.command(name='ai-chat-reset')
+    async def reset_conversation(self, ctx):
+        """Resets the conversation history."""
+        logger.info(f"{ctx.author} called the ai-chat-reset command")
+        if not self.check_debug_mode(ctx):
+            return
+
+        self.conversation_history = []
+        self.reset_flag = True
+        await ctx.send("Conversation history has been reset. New messages will be tracked from now on.")
+
     @commands.Cog.listener()
     async def on_message(self, message):
         """Responds to messages in the chatroom when the chat session is active."""
@@ -95,6 +116,11 @@ class GeminiConvCog(commands.Cog):
             return
 
         try:
+            # If reset flag is set, clear the conversation history and reset the flag
+            if self.reset_flag:
+                self.conversation_history = []
+                self.reset_flag = False
+
             # Fetch the specified channel
             channel = discord.utils.get(message.guild.channels, name=CONVERSATION_CHANNEL_NAME)
             if not channel:
@@ -106,13 +132,9 @@ class GeminiConvCog(commands.Cog):
 
             # Combine the conversation history with the new message
             conversation_context = "\n".join(self.conversation_history)
-
             full_prompt = f"TASK: You are cool-ai man in a conversation. I will provide the conversation. Read the conversation then respond as someone would to continue the conversation. \
-                If the last part of the conversation doesnt reference anything specific then look back in the conversation to find some context.n\
-                CONVERSATION: {conversation_context} "
-
-            #full_prompt = f"Your name is cool-ai-man. Read and understand the conversation then respond to: [ {self.conversation_history[-1]}. ]\
-             #           Here is the conversation where you are cool-ai-man and I am paymetothrow for context. [ {conversation_context}. ]"
+                If the last part of the conversation doesnt reference anything specific then look back in the conversation to find some context.\n\
+                CONVERSATION: {conversation_context}\n{message.author.name}: {message.content}"
 
             logger.info(f"Full prompt: {full_prompt}")
 
@@ -122,10 +144,10 @@ class GeminiConvCog(commands.Cog):
 
             # Update the conversation history with the new message
             self.conversation_history.append(f"{message.author.name}: {message.content}")
-            if len(self.conversation_history) > 10:
+            if len(self.conversation_history) > 20:
                 self.conversation_history.pop(0)
-            
-                        # If voice chat is active, play the response in the voice channel
+
+            # If voice chat is active, play the response in the voice channel
             if self.chat_voice_active:
                 if message.author.voice and message.author.voice.channel:
                     voice_channel = message.author.voice.channel
