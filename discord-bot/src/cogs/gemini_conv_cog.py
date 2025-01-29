@@ -39,6 +39,7 @@ class GeminiConvCog(commands.Cog):
         self.chat_session_active = True
         self.chat_voice_active = False
         self.message_counts_since_reset = {}
+        self.number_of_messages_to_track = 20
 
         # Define a dictionary mapping channel names to handler functions
         self.channel_handlers = {
@@ -55,21 +56,20 @@ class GeminiConvCog(commands.Cog):
 
     async def fetch_conversation_history(self, channel, limit=10):
         """Fetch the last 'limit' messages from the specified channel."""
+        self.conversation_histories[channel.guild.id][channel.name] = []
         async for message in channel.history(limit=limit, oldest_first=False):
             self.conversation_histories[channel.guild.id][channel.name].append(f"{message.author.name}: {message.content}")
         self.conversation_histories[channel.guild.id][channel.name].reverse()  # Ensure the messages are in chronological order
 
     async def update_conversation_history(self, message):
         """Update the conversation history with the new message."""
-        self.conversation_histories[message.guild.id][message.channel.name].append(f"{message.author.name}: {message.content}")
-        self.message_counts_since_reset[message.guild.id][message.channel.name] += 1
-        if len(self.conversation_histories[message.guild.id][message.channel.name]) > 20:
+        if len(self.conversation_histories[message.guild.id][message.channel.name]) > self.number_of_messages_to_track:
             self.conversation_histories[message.guild.id][message.channel.name].pop(0)
 
     async def reset_conversation_history(self, guild_id, channel_name):
         """Reset the conversation history for the specified channel."""
-        self.conversation_histories[guild_id][channel_name] = []
         self.message_counts_since_reset[guild_id][channel_name] = 0
+        self.conversation_histories[guild_id][channel_name] = []
 
     @commands.command(name='ai-chat')
     async def toggle_chat_session(self, ctx):
@@ -140,10 +140,18 @@ class GeminiConvCog(commands.Cog):
             self.conversation_histories[guild_id] = {}
         if channel_name not in self.conversation_histories[guild_id]:
             self.conversation_histories[guild_id][channel_name] = []
-        if guild_id not in self.message_counts_since_reset:
             self.message_counts_since_reset[guild_id] = {}
-        if channel_name not in self.message_counts_since_reset[guild_id]:
-            self.message_counts_since_reset[guild_id][channel_name] = 20
+            self.message_counts_since_reset[guild_id][channel_name] = self.number_of_messages_to_track
+
+        # Fetch the conversation history for the channel
+        self.message_counts_since_reset[guild_id][channel_name] += 1
+        limit = min(self.message_counts_since_reset[guild_id][channel_name],
+                     self.number_of_messages_to_track)
+        logger.info(f"Fetching conversation history for channel: {channel_name}, limit: {limit}")
+        await self.fetch_conversation_history(message.channel, limit)
+
+        # Update the message to the conversation history
+        await self.update_conversation_history(message)
 
         # Check if the message's channel is in the dictionary
         handler = self.channel_handlers.get(channel_name)
@@ -152,7 +160,6 @@ class GeminiConvCog(commands.Cog):
 
     async def handle_conversation_channel(self, message):
         """Handle messages in the conversation channel."""
-        
         if not self.chat_session_active:
             return
 
@@ -164,11 +171,6 @@ class GeminiConvCog(commands.Cog):
             channel_name = message.channel.name
 
             logger.info(f"guild_id: {guild_id}, channel_name: {channel_name}")
-
-            # Fetch messages from the channel if conversation history is empty
-            if not self.conversation_histories[guild_id].get(channel_name) or self.message_counts_since_reset[guild_id][channel_name] < 20:
-                limit = self.message_counts_since_reset[guild_id][channel_name] + 1
-                await self.fetch_conversation_history(message.channel, limit)
 
             # Combine the conversation history with the new message
             conversation_context = "\n".join(self.conversation_histories[guild_id][channel_name])
@@ -185,9 +187,6 @@ class GeminiConvCog(commands.Cog):
             ctx = await self.bot.get_context(message)
             text_response = await process_and_generate_response(ctx, self.model, self.bucket_name, full_prompt, dont_modify_prompt=True)
             await message.channel.send(text_response)
-
-            # Update the conversation history with the new message
-            await self.update_conversation_history(message)
 
             # If voice chat is active, play the response in the voice channel
             if self.chat_voice_active:
@@ -212,11 +211,6 @@ class GeminiConvCog(commands.Cog):
             guild_id = message.guild.id
             channel_name = message.channel.name
 
-            # Fetch messages from the channel if conversation history is empty
-            if not self.conversation_histories[guild_id].get(channel_name) or self.message_counts_since_reset[guild_id][channel_name] < 20:
-                limit = self.message_counts_since_reset[guild_id][channel_name] + 1
-                await self.fetch_conversation_history(message.channel, limit)
-
             # Combine the conversation history with the new message
             conversation_context = "\n".join(self.conversation_histories[guild_id][channel_name])
             full_prompt = ("TASK: You are the dealer named cool-ai-man in this conversation running a blackjack game. I will provide the conversation."
@@ -237,10 +231,6 @@ class GeminiConvCog(commands.Cog):
             ctx = await self.bot.get_context(message)
             text_response = await process_and_generate_response(ctx, self.model, self.bucket_name, full_prompt, dont_modify_prompt=True)
             await message.channel.send(text_response)
-
-            # Update the conversation history with the new message
-            await self.update_conversation_history(message)
-
             # If voice chat is active, play the response in the voice channel
             if self.chat_voice_active:
                 await self.play_voice_response(message, text_response)
