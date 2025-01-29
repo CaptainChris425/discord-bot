@@ -1,0 +1,5 @@
+DISCORD_TOKEN=''
+GOOGLE_CLOUD_PROJECT_ID=''
+GCS_BUCKET_NAME=''
+DEBUG = 'False'  # Set this to True to enable debug mode
+DEBUG_GUILD_ID = 1234567890  # Replace with your specific Discord server ID
