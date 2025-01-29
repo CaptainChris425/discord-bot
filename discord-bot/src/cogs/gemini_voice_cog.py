@@ -28,7 +28,6 @@ class GeminiVoiceCog(commands.Cog):
         self.location = 'us-central1'  # Change this to your Vertex AI location
         self.bucket_name = os.getenv('GCS_BUCKET_NAME')
         self.model = GenerativeModel("gemini-1.5-flash-002")
-        self.image_model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")  # Initialize the ImageGenerationModel
         # Initialize the Vertex AI client
         vertexai.init(project=self.project_id, location=self.location)
 

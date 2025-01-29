@@ -28,7 +28,7 @@ class GeminiCog(commands.Cog):
         self.location = 'us-central1'  # Change this to your Vertex AI location
         self.bucket_name = os.getenv('GCS_BUCKET_NAME')
         self.model = GenerativeModel("gemini-1.5-flash-002")
-        self.image_model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")  # Initialize the ImageGenerationModel
+        #self.image_model = ImageGenerationModel.from_pretrained("imagen-3.0-generate-001")  # Initialize the ImageGenerationModel
         # Initialize the Vertex AI client
         vertexai.init(project=self.project_id, location=self.location)
 
@@ -47,38 +47,40 @@ class GeminiCog(commands.Cog):
 
         try:
             text_response = await process_and_generate_response(ctx, self.model, self.bucket_name, prompt)
-            await ctx.send(text_response)
+            # Split the response into chunks of 2000 characters
+            for i in range(0, len(text_response), 2000):
+                await ctx.send(text_response[i:i+2000])
         except Exception as e:
             await ctx.send(f"Error: {str(e)}")
 
-    #@commands.command(name='imgen')
-    async def imgen(self, ctx, *, prompt: str = None):
-        """Generates an image based on the given prompt using ImageGenerationModel"""
-        logger.info(f"{ctx.author} called the imgen command with prompt: {prompt}")
-        if not self.check_debug_mode(ctx):
-            return
+    # @commands.command(name='imgen')
+    # async def imgen(self, ctx, *, prompt: str = None):
+    #     """Generates an image based on the given prompt using ImageGenerationModel"""
+    #     logger.info(f"{ctx.author} called the imgen command with prompt: {prompt}")
+    #     if not self.check_debug_mode(ctx):
+    #         return
 
-        try:
-            for attempt in range(3):  # Retry up to 3 times
-                image_response = self.image_model.generate_images(
-                    prompt=prompt,
-                    number_of_images=3,
-                    language="en",
-                    aspect_ratio="1:1",
-                    safety_filter_level="block_some",
-                )
-                logger.info(f"Attempt {attempt + 1}: image_response: {image_response}")
+    #     try:
+    #         for attempt in range(3):  # Retry up to 3 times
+    #             image_response = self.image_model.generate_images(
+    #                 prompt=prompt,
+    #                 number_of_images=3,
+    #                 language="en",
+    #                 aspect_ratio="1:1",
+    #                 safety_filter_level="block_some",
+    #             )
+    #             logger.info(f"Attempt {attempt + 1}: image_response: {image_response}")
 
-                if image_response.images:  # Check if any images were generated
-                    image_response[0].save(location="temp_image.png")
-                    await ctx.send(file=discord.File("temp_image.png"))
-                    os.remove("temp_image.png")  # Clean up the downloaded file
-                    break
-            else:
-                await ctx.send("Failed to generate images after 3 attempts.")
+    #             if image_response.images:  # Check if any images were generated
+    #                 image_response[0].save(location="temp_image.png")
+    #                 await ctx.send(file=discord.File("temp_image.png"))
+    #                 os.remove("temp_image.png")  # Clean up the downloaded file
+    #                 break
+    #         else:
+    #             await ctx.send("Failed to generate images after 3 attempts.")
 
-        except Exception as e:
-            await ctx.send(f"Error: {str(e)}")
+    #     except Exception as e:
+    #         await ctx.send(f"Error: {str(e)}")
 
 async def setup(bot):
     await bot.add_cog(GeminiCog(bot))
