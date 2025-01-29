@@ -20,7 +20,11 @@ logger = logging.getLogger(__name__)
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 DEBUG_GUILD_ID = os.getenv('DEBUG_GUILD_ID', 123456789012345678)
 CONVERSATION_CHANNEL_NAME = os.getenv('CONVERSATION_CHANNEL_NAME', 'ai-chatroom')
-logger.info(f"DEBUG: {DEBUG}, DEBUG_GUILD_ID: {DEBUG_GUILD_ID}, CONVERSATION_CHANNEL_NAME: {CONVERSATION_CHANNEL_NAME}")
+BLACKJACK_CHANNEL_NAME = os.getenv('BLACKJACK_CHANNEL_NAME', 'blackjack-ai-bot')
+
+channel_names = [CONVERSATION_CHANNEL_NAME, BLACKJACK_CHANNEL_NAME]
+channel_names_str = ', '.join(channel_names)
+logger.info(f"DEBUG: {DEBUG}, DEBUG_GUILD_ID: {DEBUG_GUILD_ID}, CHANNEL_NAMES: {channel_names_str}")
 
 class GeminiConvCog(commands.Cog):
     def __init__(self, bot):
@@ -31,11 +35,17 @@ class GeminiConvCog(commands.Cog):
         self.model = GenerativeModel("gemini-1.5-flash-002")
         # Initialize the Vertex AI client
         vertexai.init(project=self.project_id, location=self.location)
-        self.conversation_history = []
+        self.conversation_histories = {}
         self.chat_session_active = True
         self.chat_voice_active = False
-        self.reset_flag = False
-        self.message_count_since_reset = 20
+        self.message_counts_since_reset = {}
+
+        # Define a dictionary mapping channel names to handler functions
+        self.channel_handlers = {
+            CONVERSATION_CHANNEL_NAME: self.handle_conversation_channel,
+            BLACKJACK_CHANNEL_NAME: self.handle_blackjack_channel,
+            # Add more channels and their corresponding handler functions here
+        }
 
     def check_debug_mode(self, ctx):
         if DEBUG and ctx.guild.id != DEBUG_GUILD_ID:
@@ -45,10 +55,21 @@ class GeminiConvCog(commands.Cog):
 
     async def fetch_conversation_history(self, channel, limit=10):
         """Fetch the last 'limit' messages from the specified channel."""
-        self.conversation_history = []
         async for message in channel.history(limit=limit, oldest_first=False):
-            self.conversation_history.append(f"{message.author.name}: {message.content}")
-        self.conversation_history.reverse()  # Ensure the messages are in chronological order
+            self.conversation_histories[channel.guild.id][channel.name].append(f"{message.author.name}: {message.content}")
+        self.conversation_histories[channel.guild.id][channel.name].reverse()  # Ensure the messages are in chronological order
+
+    async def update_conversation_history(self, message):
+        """Update the conversation history with the new message."""
+        self.conversation_histories[message.guild.id][message.channel.name].append(f"{message.author.name}: {message.content}")
+        self.message_counts_since_reset[message.guild.id][message.channel.name] += 1
+        if len(self.conversation_histories[message.guild.id][message.channel.name]) > 20:
+            self.conversation_histories[message.guild.id][message.channel.name].pop(0)
+
+    async def reset_conversation_history(self, guild_id, channel_name):
+        """Reset the conversation history for the specified channel."""
+        self.conversation_histories[guild_id][channel_name] = []
+        self.message_counts_since_reset[guild_id][channel_name] = 0
 
     @commands.command(name='ai-chat')
     async def toggle_chat_session(self, ctx):
@@ -60,7 +81,7 @@ class GeminiConvCog(commands.Cog):
         self.chat_session_active = not self.chat_session_active
         status = "started" if self.chat_session_active else "stopped"
         await ctx.send(f"Chat session {status}.")
-    
+
     @commands.command(name='ai-chat-stop')
     async def gemini_stop(self, ctx):
         """Stops the bot from speaking"""
@@ -93,81 +114,84 @@ class GeminiConvCog(commands.Cog):
 
     @commands.command(name='ai-chat-reset')
     async def reset_conversation(self, ctx):
-        """Resets the conversation history."""
+        """Resets the conversation history for the current channel."""
         logger.info(f"{ctx.author} called the ai-chat-reset command")
         if not self.check_debug_mode(ctx):
             return
 
-        self.conversation_history = []
-        self.reset_flag = True
-        await ctx.send("Conversation history has been reset. New messages will be tracked from now on.")
+        guild_id = ctx.guild.id
+        channel_name = ctx.channel.name
+        await self.reset_conversation_history(guild_id, channel_name)
+        await ctx.send(f"Conversation history for {channel_name} has been reset. New messages will be tracked from now on.")
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        """Responds to messages in the chatroom when the chat session is active."""
-        ctx = await self.bot.get_context(message)
+        """Event listener that triggers when a message is sent in a channel."""
+        logger.info(f"Message received in channel: {message.channel.name}, content: {message.content}, author: {message.author.name}")
+        # Check if the message is from the bot itself
+        if message.author == self.bot.user:
+            return
+
+        guild_id = message.guild.id
+        channel_name = message.channel.name
+
+        # Ensure all necessary entries are initialized for the guild and channel
+        if guild_id not in self.conversation_histories:
+            self.conversation_histories[guild_id] = {}
+        if channel_name not in self.conversation_histories[guild_id]:
+            self.conversation_histories[guild_id][channel_name] = []
+        if guild_id not in self.message_counts_since_reset:
+            self.message_counts_since_reset[guild_id] = {}
+        if channel_name not in self.message_counts_since_reset[guild_id]:
+            self.message_counts_since_reset[guild_id][channel_name] = 20
+
+        # Check if the message's channel is in the dictionary
+        handler = self.channel_handlers.get(channel_name)
+        if handler:
+            await handler(message)
+
+    async def handle_conversation_channel(self, message):
+        """Handle messages in the conversation channel."""
+        
         if not self.chat_session_active:
             return
 
         if message.author == self.bot.user:
             return
 
-        if message.channel.name != CONVERSATION_CHANNEL_NAME:
-            return
-
         try:
-            # If reset flag is set, clear the conversation history and reset the flag
-            if self.reset_flag:
-                self.conversation_history = []
-                self.reset_flag = False
-                self.message_count_since_reset = 0
+            guild_id = message.guild.id
+            channel_name = message.channel.name
 
-            # Fetch the specified channel
-            channel = discord.utils.get(message.guild.channels, name=CONVERSATION_CHANNEL_NAME)
-            if not channel:
-                await message.channel.send(f"Channel '{CONVERSATION_CHANNEL_NAME}' not found.")
-                return
+            logger.info(f"guild_id: {guild_id}, channel_name: {channel_name}")
 
             # Fetch messages from the channel if conversation history is empty
-            if not self.conversation_history or self.message_count_since_reset < 20:
-                limit = self.message_count_since_reset + 1
-                await self.fetch_conversation_history(channel, limit)
+            if not self.conversation_histories[guild_id].get(channel_name) or self.message_counts_since_reset[guild_id][channel_name] < 20:
+                limit = self.message_counts_since_reset[guild_id][channel_name] + 1
+                await self.fetch_conversation_history(message.channel, limit)
 
             # Combine the conversation history with the new message
-            conversation_context = "\n".join(self.conversation_history)
-            full_prompt = ("TASK: You are cool-ai man in a conversation. I will provide the conversation."
+            conversation_context = "\n".join(self.conversation_histories[guild_id][channel_name])
+            full_prompt = ("TASK: You are cool-ai-man in a conversation. I will provide the conversation."
                             "Read the conversation then respond as someone would to continue the conversation. "
-                            "Keep it short unless you feel details are nessesary. "
-                            "If the last part of the conversation doesnt reference anything specific then look back in the conversation to find some context. \n"
+                            "ADDITIONAL INFORMATION: Keep your response short unless you feel details are necessary or are asked for them. "
+                            "If someone asks to play a game, try your best to keep track of the game. Even if another conversation is happening. "
+                            "If the last part of the conversation doesn't reference anything specific then look back in the conversation to find some context. \n"
                             f"CONVERSATION: {conversation_context}")
 
             logger.info(f"Full prompt: {full_prompt}")
 
             # Send the combined prompt to the Gemini model
+            ctx = await self.bot.get_context(message)
             text_response = await process_and_generate_response(ctx, self.model, self.bucket_name, full_prompt, dont_modify_prompt=True)
             await message.channel.send(text_response)
 
             # Update the conversation history with the new message
-            self.conversation_history.append(f"{message.author.name}: {message.content}")
-            self.message_count_since_reset += 1
-            if len(self.conversation_history) > 20:
-                self.conversation_history.pop(0)
+            await self.update_conversation_history(message)
 
             # If voice chat is active, play the response in the voice channel
             if self.chat_voice_active:
-                if message.author.voice and message.author.voice.channel:
-                    voice_channel = message.author.voice.channel
-                    if not message.guild.voice_client:
-                        await voice_channel.connect()
-                    elif message.guild.voice_client.channel != voice_channel:
-                        await message.guild.voice_client.move_to(voice_channel)
-
-                    tts = gTTS(text_response, tld='ca', lang='en')
-                    tts.save('gemini.mp3')
-                    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio('gemini.mp3'))
-                    message.guild.voice_client.play(source, after=lambda e: logger.error(f'Player error: {e}') if e else None)
-                    while message.guild.voice_client.is_playing():
-                        await asyncio.sleep(1)
+                await self.play_voice_response(message, text_response)
             else:
                 # If voice chat is not active, leave the voice channel if connected
                 if message.guild.voice_client:
@@ -175,6 +199,74 @@ class GeminiConvCog(commands.Cog):
 
         except Exception as e:
             await message.channel.send(f"Error: {str(e)}")
+
+    async def handle_blackjack_channel(self, message):
+        """Handle messages in the blackjack channel."""
+        if not self.chat_session_active:
+            return
+
+        if message.author == self.bot.user:
+            return
+
+        try:
+            guild_id = message.guild.id
+            channel_name = message.channel.name
+
+            # Fetch messages from the channel if conversation history is empty
+            if not self.conversation_histories[guild_id].get(channel_name) or self.message_counts_since_reset[guild_id][channel_name] < 20:
+                limit = self.message_counts_since_reset[guild_id][channel_name] + 1
+                await self.fetch_conversation_history(message.channel, limit)
+
+            # Combine the conversation history with the new message
+            conversation_context = "\n".join(self.conversation_histories[guild_id][channel_name])
+            full_prompt = ("TASK: You are the dealer named cool-ai-man in this conversation running a blackjack game. I will provide the conversation."
+                            "Read the conversation then respond as the dealer to continue the game. "
+                            "ADDITIONAL INFORMATION: Keep track of the game state and respond accordingly. "
+                            "If someone asks for the rules, explain them briefly. "
+                            "If someone asks for their current hand or the dealer's hand, provide the information. "
+                            "If someone asks to hit, deal a card to them and update their hand. "
+                            "If someone asks to stand, move to the next player or the dealer's turn. "
+                            "If someone asks to double down, double their bet and deal one final card to them. "
+                            "If someone asks to split, split their hand into two separate hands and deal one card to each hand. "
+                            "If the last part of the conversation doesn't reference anything specific then look back in the conversation to find some context. \n"
+                            f"CONVERSATION: {conversation_context}")
+
+            logger.info(f"Full prompt: {full_prompt}")
+
+            # Send the combined prompt to the Gemini model
+            ctx = await self.bot.get_context(message)
+            text_response = await process_and_generate_response(ctx, self.model, self.bucket_name, full_prompt, dont_modify_prompt=True)
+            await message.channel.send(text_response)
+
+            # Update the conversation history with the new message
+            await self.update_conversation_history(message)
+
+            # If voice chat is active, play the response in the voice channel
+            if self.chat_voice_active:
+                await self.play_voice_response(message, text_response)
+            else:
+                # If voice chat is not active, leave the voice channel if connected
+                if message.guild.voice_client:
+                    await message.guild.voice_client.disconnect()
+
+        except Exception as e:
+            await message.channel.send(f"Error: {str(e)}")
+
+    async def play_voice_response(self, message, text_response):
+        """Play the text response in the voice channel."""
+        if message.author.voice and message.author.voice.channel:
+            voice_channel = message.author.voice.channel
+            if not message.guild.voice_client:
+                await voice_channel.connect()
+            elif message.guild.voice_client.channel != voice_channel:
+                await message.guild.voice_client.move_to(voice_channel)
+
+            tts = gTTS(text_response, tld='ca', lang='en')
+            tts.save('gemini.mp3')
+            source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio('gemini.mp3'))
+            message.guild.voice_client.play(source, after=lambda e: logger.error(f'Player error: {e}') if e else None)
+            while message.guild.voice_client.is_playing():
+                await asyncio.sleep(1)
 
 async def setup(bot):
     await bot.add_cog(GeminiConvCog(bot))
