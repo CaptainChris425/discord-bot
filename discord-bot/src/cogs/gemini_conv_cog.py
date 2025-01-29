@@ -32,9 +32,10 @@ class GeminiConvCog(commands.Cog):
         # Initialize the Vertex AI client
         vertexai.init(project=self.project_id, location=self.location)
         self.conversation_history = []
-        self.chat_session_active = False
+        self.chat_session_active = True
         self.chat_voice_active = False
         self.reset_flag = False
+        self.message_count_since_reset = 20
 
     def check_debug_mode(self, ctx):
         if DEBUG and ctx.guild.id != DEBUG_GUILD_ID:
@@ -42,10 +43,10 @@ class GeminiConvCog(commands.Cog):
             return False
         return True
 
-    async def fetch_conversation_history(self, channel):
-        """Fetch the last 10 messages from the specified channel."""
+    async def fetch_conversation_history(self, channel, limit=10):
+        """Fetch the last 'limit' messages from the specified channel."""
         self.conversation_history = []
-        async for message in channel.history(limit=10, oldest_first=False):
+        async for message in channel.history(limit=limit, oldest_first=False):
             self.conversation_history.append(f"{message.author.name}: {message.content}")
         self.conversation_history.reverse()  # Ensure the messages are in chronological order
 
@@ -119,6 +120,7 @@ class GeminiConvCog(commands.Cog):
             if self.reset_flag:
                 self.conversation_history = []
                 self.reset_flag = False
+                self.message_count_since_reset = 0
 
             # Fetch the specified channel
             channel = discord.utils.get(message.guild.channels, name=CONVERSATION_CHANNEL_NAME)
@@ -126,14 +128,16 @@ class GeminiConvCog(commands.Cog):
                 await message.channel.send(f"Channel '{CONVERSATION_CHANNEL_NAME}' not found.")
                 return
 
-            # Fetch the last 10 messages from the channel
-            await self.fetch_conversation_history(channel)
+            # Fetch messages from the channel if conversation history is empty
+            if not self.conversation_history or self.message_count_since_reset < 20:
+                limit = self.message_count_since_reset + 1
+                await self.fetch_conversation_history(channel, limit)
 
             # Combine the conversation history with the new message
             conversation_context = "\n".join(self.conversation_history)
             full_prompt = f"TASK: You are cool-ai man in a conversation. I will provide the conversation. Read the conversation then respond as someone would to continue the conversation. \
-                If the last part of the conversation doesnt reference anything specific then look back in the conversation to find some context.\n\
-                CONVERSATION: {conversation_context}\n{message.author.name}: {message.content}"
+                If the last part of the conversation doesnt reference anything specific then look back in the conversation to find some context. If an media file is sent with this prompt, that means the media file is the last message. \n\
+                CONVERSATION: {conversation_context}"
 
             logger.info(f"Full prompt: {full_prompt}")
 
@@ -143,6 +147,7 @@ class GeminiConvCog(commands.Cog):
 
             # Update the conversation history with the new message
             self.conversation_history.append(f"{message.author.name}: {message.content}")
+            self.message_count_since_reset += 1
             if len(self.conversation_history) > 20:
                 self.conversation_history.pop(0)
 
