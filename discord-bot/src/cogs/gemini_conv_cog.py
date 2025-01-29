@@ -135,14 +135,16 @@ class GeminiConvCog(commands.Cog):
 
             # Combine the conversation history with the new message
             conversation_context = "\n".join(self.conversation_history)
-            full_prompt = f"TASK: You are cool-ai man in a conversation. I will provide the conversation. Read the conversation then respond as someone would to continue the conversation. \
-                If the last part of the conversation doesnt reference anything specific then look back in the conversation to find some context. If an media file is sent with this prompt, that means the media file is the last message. \n\
-                CONVERSATION: {conversation_context}"
+            full_prompt = ("TASK: You are cool-ai man in a conversation. I will provide the conversation."
+                            "Read the conversation then respond as someone would to continue the conversation. "
+                            "Keep it short unless you feel details are nessesary. "
+                            "If the last part of the conversation doesnt reference anything specific then look back in the conversation to find some context. \n"
+                            f"CONVERSATION: {conversation_context}")
 
             logger.info(f"Full prompt: {full_prompt}")
 
             # Send the combined prompt to the Gemini model
-            text_response = await process_and_generate_response(ctx, self.model, self.bucket_name, full_prompt)
+            text_response = await process_and_generate_response(ctx, self.model, self.bucket_name, full_prompt, dont_modify_prompt=True)
             await message.channel.send(text_response)
 
             # Update the conversation history with the new message

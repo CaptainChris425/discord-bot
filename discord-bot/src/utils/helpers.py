@@ -57,7 +57,7 @@ def detect_safe_search_uri(uri):
             "https://cloud.google.com/apis/design/errors".format(response.error.message)
         )
 
-async def gemini_image(ctx, model, prompt: str = None):
+async def gemini_image(ctx, model, prompt: str = None, dont_modify_prompt: bool = False):
     """Interacts with the Gemini Vertex AI API for images"""
     logger.info(f"{ctx.author} called the gemini_image function with prompt: {prompt}")
     if ctx.message is None:
@@ -81,16 +81,19 @@ async def gemini_image(ctx, model, prompt: str = None):
     try:
         detect_safe_search_uri(image_link[0])
         image_file = Part.from_uri(image_link[0], image_link[1])
-        if prompt:
-            custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} { prompt}")
+        if dont_modify_prompt:
+            custom_instructions = prompt
         else:
-            custom_instructions = INSTRUCTIONS['image']
+            if prompt:
+                custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} { prompt}")
+            else:
+                custom_instructions = INSTRUCTIONS['image']
         response = model.generate_content([image_file, custom_instructions]).text
         return response
     except Exception as e:
         return f"Error: {str(e)}"
 
-async def gemini_video(ctx, model, bucket_name, prompt: str = None):
+async def gemini_video(ctx, model, bucket_name, prompt: str = None, dont_modify_prompt: bool = False):
     """Interacts with the Gemini Vertex AI API for videos"""
     logger.info(f"{ctx.author} called the gemini_video function with prompt: {prompt}")
     if ctx.message is None:
@@ -131,10 +134,13 @@ async def gemini_video(ctx, model, bucket_name, prompt: str = None):
 
         # Use the GCS URI with Vertex AI
         video_file = Part.from_uri(gcs_uri, video_link[1])
-        if prompt:
-            custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} { prompt}")
+        if dont_modify_prompt:
+            custom_instructions = prompt
         else:
-            custom_instructions = INSTRUCTIONS['video']
+            if prompt:
+                custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} { prompt}")
+            else:
+                custom_instructions = INSTRUCTIONS['video']
         response = model.generate_content([video_file, custom_instructions]).text
 
         # Clean up the downloaded file and delete from GCS
@@ -145,8 +151,8 @@ async def gemini_video(ctx, model, bucket_name, prompt: str = None):
     except Exception as e:
         return f"Error: {str(e)}"
 
-async def gemini_document(ctx, model, prompt: str = None):
-    """Interacts with the Gemini Vertex AI API for PDF and TXT files"""
+async def gemini_document(ctx, model, prompt: str = None, dont_modify_prompt: bool = False):
+    """Interacts with the Gemini Vertex AI API for documents"""
     logger.info(f"{ctx.author} called the gemini_document function with prompt: {prompt}")
     if ctx.message is None:
         # Fetch the last message in the channel
@@ -158,26 +164,29 @@ async def gemini_document(ctx, model, prompt: str = None):
     if ctx.message is None:
         return "No message found to extract document links from."
 
-    # Check for PDF and TXT attachments using MIME type
+    # Check for document attachments using MIME type
     document_links = [(attachment.url, attachment.content_type) for attachment in ctx.message.attachments if attachment.content_type and (attachment.content_type.startswith('application/pdf') or attachment.content_type.startswith('text/plain'))]
 
     if not document_links:
-        return "No PDF or TXT links found in attachments."
+        return "No document links found in attachments."
 
     document_link = document_links[0]
 
     try:
         document_file = Part.from_uri(document_link[0], document_link[1])
-        if prompt:
-            custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} {prompt}")
+        if dont_modify_prompt:
+            custom_instructions = prompt
         else:
-            custom_instructions = INSTRUCTIONS['document']
+            if prompt:
+                custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} {prompt}")
+            else:
+                custom_instructions = INSTRUCTIONS['document']
         response = model.generate_content([document_file, custom_instructions]).text
         return response
     except Exception as e:
         return f"Error: {str(e)}"
 
-async def process_and_generate_response(ctx, model, bucket_name, prompt: str = None):
+async def process_and_generate_response(ctx, model, bucket_name, prompt: str = None, dont_modify_prompt: bool = False):
     """Processes attachments and generates a response using the Gemini Vertex AI API"""
     # Check for image, video, or document links
     image_links = [(attachment.url, attachment.content_type) for attachment in ctx.message.attachments if attachment.content_type and attachment.content_type.startswith('image/')]
@@ -185,16 +194,19 @@ async def process_and_generate_response(ctx, model, bucket_name, prompt: str = N
     document_links = [(attachment.url, attachment.content_type) for attachment in ctx.message.attachments if attachment.content_type and (attachment.content_type.startswith('application/pdf') or attachment.content_type.startswith('text/plain'))]
 
     if image_links:
-        return await gemini_image(ctx, model, prompt=prompt)
+        return await gemini_image(ctx, model, prompt=prompt, dont_modify_prompt=dont_modify_prompt)
     if video_links:
-        return await gemini_video(ctx, model, bucket_name, prompt=prompt)
+        return await gemini_video(ctx, model, bucket_name, prompt=prompt, dont_modify_prompt=dont_modify_prompt)
     if document_links:
-        return await gemini_document(ctx, model, prompt=prompt)
+        return await gemini_document(ctx, model, prompt=prompt, dont_modify_prompt=dont_modify_prompt)
 
     # If no attachments, proceed with text prompt
     prompt = prompt or INSTRUCTIONS['greeting']
     chat_session = model.start_chat()
-    custom_instructions = f"{INSTRUCTIONS['freeform']} { prompt}"
+    if dont_modify_prompt:
+        custom_instructions = prompt
+    else:
+        custom_instructions = f"{INSTRUCTIONS['freeform']} {prompt}"
     text_response = []
     responses = chat_session.send_message(custom_instructions, stream=True)
     for chunk in responses:
