@@ -26,7 +26,7 @@ gcloud artifacts repositories create $ARTIFACT_REPOSITORY_NAME --repository-form
 gcloud artifacts repositories list
 
 # Build and upload image
-gcloud builds submit --region=$REGION --tag $REGION-docker.pkg.dev/$GCLOUD_PROJECT_ID/$ARTIFACT_REPOSITORY_NAME/$ARTIFACT_IMAGE_NAME-image:latest
+gcloud builds submit --region=$REGION --tag $REGION-docker.pkg.dev/$GCLOUD_PROJECT_ID/$ARTIFACT_REPOSITORY_NAME/$ARTIFACT_IMAGE_NAME-image:1.0.1
 
 # Create a GKE cluster
 # gcloud container clusters create-auto $CLUSTER_NAME --region $REGION
