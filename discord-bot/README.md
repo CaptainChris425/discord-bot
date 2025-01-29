@@ -9,8 +9,14 @@ discord-bot
 ├── src
 │   ├── bot.py
 │   ├── cogs
-│   │   └── example_cog.py
+│   │   ├── __init__.py
+│   │   ├── example_cog.py
+│   │   ├── gemini_cog.py
+│   │   ├── gemini_conv_cog.py
+│   │   ├── gemini_voice_cog.py
+│   │   └── image_link_cog.py
 │   └── utils
+│       ├── __init__.py
 │       └── helpers.py
 ├── requirements.txt
 └── README.md
@@ -36,7 +42,7 @@ discord-bot
    - Copy the bot token.
 
 4. **Configure the bot token:**
-   In `src/bot.py`, replace `YOUR_BOT_TOKEN` with your actual bot token.
+   In `src/bot.py`, replace `YOUR_BOT_TOKEN` with your actual bot token, or add it to .env.
 
 ## Usage
 
