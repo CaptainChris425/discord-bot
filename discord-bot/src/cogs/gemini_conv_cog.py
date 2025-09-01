@@ -143,9 +143,11 @@ class GeminiConvCog(commands.Cog):
             self.conversation_histories[guild_id] = {}
         if channel_name not in self.conversation_histories[guild_id]:
             self.conversation_histories[guild_id][channel_name] = []
+        if guild_id not in self.message_counts_since_reset:
             self.message_counts_since_reset[guild_id] = {}
+        if channel_name not in self.message_counts_since_reset[guild_id]:
             self.message_counts_since_reset[guild_id][channel_name] = self.number_of_messages_to_track
-
+        logger.info(f"message_counts_since_reset: {self.message_counts_since_reset}")
         # Fetch the conversation history for the channel
         self.message_counts_since_reset[guild_id][channel_name] += 1
         limit = min(self.message_counts_since_reset[guild_id][channel_name],
