@@ -102,7 +102,7 @@ class GeminiConvCog(commands.Cog):
         await ctx.send(f"Chat session is {status}.")
 
     @commands.command(name='ai-chat-voice')
-    async def chat_voice(self, ctx, *, prompt: str = None):
+    async def chat_voice(self, ctx, *, prompt: str = ""):
         """Main command to interact with the Gemini Vertex AI API in a voice chat session."""
         logger.info(f"{ctx.author} called the ai-chat-voice command with prompt: {prompt}")
         if not self.check_debug_mode(ctx):
