@@ -57,7 +57,7 @@ def detect_safe_search_uri(uri):
             "https://cloud.google.com/apis/design/errors".format(response.error.message)
         )
 
-async def gemini_image(ctx, model, prompt: str = None, dont_modify_prompt: bool = False):
+async def gemini_image(ctx, model, bucket_name, prompt: str = None, dont_modify_prompt: bool = False):
     """Interacts with the Gemini Vertex AI API for images"""
     logger.info(f"{ctx.author} called the gemini_image function with prompt: {prompt}")
     if ctx.message is None:
@@ -79,8 +79,25 @@ async def gemini_image(ctx, model, prompt: str = None, dont_modify_prompt: bool 
     image_link = image_links[0]
 
     try:
-        detect_safe_search_uri(image_link[0])
-        image_file = Part.from_uri(image_link[0], image_link[1])
+        # Download the image file
+        async with aiohttp.ClientSession() as session:
+            async with session.get(image_link[0]) as response:
+                if response.status == 200:
+                    image_path = f"temp_image_{ctx.message.id}.{image_link[1].split('/')[-1]}"
+                    with open(image_path, 'wb') as f:
+                        f.write(await response.read())
+                else:
+                    return "Failed to download the image."
+
+        # Upload the image file to Google Cloud Storage
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(os.path.basename(image_path))
+        blob.upload_from_filename(image_path)
+        gcs_uri = f"gs://{bucket_name}/{blob.name}"
+
+        # Use the GCS URI with Vertex AI
+        image_file = Part.from_uri(gcs_uri, image_link[1])
         if dont_modify_prompt:
             custom_instructions = prompt
         else:
@@ -89,6 +106,11 @@ async def gemini_image(ctx, model, prompt: str = None, dont_modify_prompt: bool 
             else:
                 custom_instructions = INSTRUCTIONS['image']
         response = model.generate_content([image_file, custom_instructions]).text
+
+        # Clean up the downloaded file and delete from GCS
+        os.remove(image_path)
+        blob.delete()
+
         return response
     except Exception as e:
         return f"Error: {str(e)}"
@@ -194,7 +216,7 @@ async def process_and_generate_response(ctx, model, bucket_name, prompt: str = N
     document_links = [(attachment.url, attachment.content_type) for attachment in ctx.message.attachments if attachment.content_type and (attachment.content_type.startswith('application/pdf') or attachment.content_type.startswith('text/plain'))]
 
     if image_links:
-        return await gemini_image(ctx, model, prompt=prompt, dont_modify_prompt=dont_modify_prompt)
+        return await gemini_image(ctx, model, bucket_name, prompt=prompt, dont_modify_prompt=dont_modify_prompt)
     if video_links:
         return await gemini_video(ctx, model, bucket_name, prompt=prompt, dont_modify_prompt=dont_modify_prompt)
     if document_links:

@@ -102,7 +102,7 @@ class GeminiConvCog(commands.Cog):
         await ctx.send(f"Chat session is {status}.")
 
     @commands.command(name='ai-chat-voice')
-    async def chat_voice(self, ctx, *, prompt: str = None):
+    async def chat_voice(self, ctx, *, prompt: str = ""):
         """Main command to interact with the Gemini Vertex AI API in a voice chat session."""
         logger.info(f"{ctx.author} called the ai-chat-voice command with prompt: {prompt}")
         if not self.check_debug_mode(ctx):
@@ -134,6 +134,9 @@ class GeminiConvCog(commands.Cog):
 
         guild_id = message.guild.id
         channel_name = message.channel.name
+
+        if channel_name not in channel_names:
+            return
 
         # Ensure all necessary entries are initialized for the guild and channel
         if guild_id not in self.conversation_histories:
@@ -186,6 +189,9 @@ class GeminiConvCog(commands.Cog):
             # Send the combined prompt to the Gemini model
             ctx = await self.bot.get_context(message)
             text_response = await process_and_generate_response(ctx, self.model, self.bucket_name, full_prompt, dont_modify_prompt=True)
+            
+            while text_response.startswith("cool-ai-man:"):
+                text_response = text_response.replace("cool-ai-man:","")
             await message.channel.send(text_response)
 
             # If voice chat is active, play the response in the voice channel
@@ -213,9 +219,11 @@ class GeminiConvCog(commands.Cog):
 
             # Combine the conversation history with the new message
             conversation_context = "\n".join(self.conversation_histories[guild_id][channel_name])
-            full_prompt = ("TASK: You are the dealer named cool-ai-man in this conversation running a blackjack game. I will provide the conversation."
+            full_prompt = ("TASK: You are the dealer of an underground gambling ring named cool-ai-man running a blackjack game in this conversation. I will provide the conversation."
                             "Read the conversation then respond as the dealer to continue the game. "
                             "ADDITIONAL INFORMATION: Keep track of the game state and respond accordingly. "
+                            "You can let players bet unordinary items like their shoes or a favor. "
+                            "If someone gets banned from the table let them bet their way back in. "
                             "If someone asks for the rules, explain them briefly. "
                             "If someone asks for their current hand or the dealer's hand, provide the information. "
                             "If someone asks to hit, deal a card to them and update their hand. "
@@ -230,6 +238,8 @@ class GeminiConvCog(commands.Cog):
             # Send the combined prompt to the Gemini model
             ctx = await self.bot.get_context(message)
             text_response = await process_and_generate_response(ctx, self.model, self.bucket_name, full_prompt, dont_modify_prompt=True)
+            while text_response.startswith("cool-ai-man:"):
+                text_response = text_response.replace("cool-ai-man:","")
             await message.channel.send(text_response)
             # If voice chat is active, play the response in the voice channel
             if self.chat_voice_active:

@@ -54,7 +54,7 @@ class GeminiVoiceCog(commands.Cog):
             await channel.connect()
 
     @commands.command(name='ai-leave')
-    async def leave(self, ctx, *, prompt: str = None):
+    async def leave(self, ctx, *, prompt: str = ""):
         """Leaves a voice channel"""
         logger.info(f"{ctx.author} called the leave command")
         if not self.check_debug_mode(ctx):
@@ -72,7 +72,7 @@ class GeminiVoiceCog(commands.Cog):
             ctx.voice_client.stop()
 
     @commands.command(name='ai-voice')
-    async def gemini_voice(self, ctx, *, prompt: str = None):
+    async def gemini_voice(self, ctx, *, prompt: str = ""):
         """Main command to interact with the Gemini Vertex AI API"""
         logger.info(f"{ctx.author} called the ai-voice command with prompt: {prompt}")
         if not self.check_debug_mode(ctx):

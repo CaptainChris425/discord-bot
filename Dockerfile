@@ -11,21 +11,20 @@ RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Pre-requisites
-RUN apt-get update && apt-get install -y
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 RUN curl -sSL https://sdk.cloud.google.com | bash
 
 # Copy the rest of the application code into the container
 COPY discord-bot .
-COPY application_default_credentials.json /
 
 # Set environment variables
 ENV DEBUG=False
+ENV GOOGLE_CLOUD_PROJECT="nightbotcommands"
 ENV GOOGLE_CLOUD_PROJECT_ID="nightbotcommands"
 ENV GCS_BUCKET_NAME="discord-bot-bucket-cy"
-ENV DEBUG_GUILD_ID=1333162585981456495
+ENV DEBUG_GUILD_ID=
 ENV CONVERSATION_CHANNEL_NAME="ai-chatroom"
 ENV DISCORD_TOKEN=""
-ENV GOOGLE_APPLICATION_CREDENTIALS="/application_default_credentials.json"
 
 
 # Expose the port the app runs on (if applicable)

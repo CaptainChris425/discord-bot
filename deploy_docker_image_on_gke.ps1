@@ -1,7 +1,7 @@
 # Set variables
 Set-Variable GCLOUD_PROJECT_ID "nightbotcommands"
 Set-Variable REGION "us-west2"
-Set-Variable CLUSTER_NAME "discord-bot-cluster-usw2"
+Set-Variable CLUSTER_NAME "discord-ai-bot-cluster-usw2"
 Set-Variable ARTIFACT_REPOSITORY_NAME "discord-bot-repo"
 Set-Variable ARTIFACT_IMAGE_NAME "gemini-bot"
 
@@ -26,7 +26,7 @@ gcloud artifacts repositories create $ARTIFACT_REPOSITORY_NAME --repository-form
 gcloud artifacts repositories list
 
 # Build and upload image
-gcloud builds submit --region=$REGION --tag $REGION-docker.pkg.dev/$GCLOUD_PROJECT_ID/$ARTIFACT_REPOSITORY_NAME/$ARTIFACT_IMAGE_NAME-image:1.0.1
+gcloud builds submit --region=$REGION --tag $REGION-docker.pkg.dev/$GCLOUD_PROJECT_ID/$ARTIFACT_REPOSITORY_NAME/$ARTIFACT_IMAGE_NAME-image:1.0.5
 
 # Create a GKE cluster
 # gcloud container clusters create-auto $CLUSTER_NAME --region $REGION
