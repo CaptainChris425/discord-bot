@@ -163,11 +163,17 @@ class AIConvRoomCog(commands.Cog):
                 await message.guild.voice_client.move_to(voice_channel)
 
             tts = gTTS(text_response, tld='ca', lang='en')
-            tts.save('response.mp3')
-            source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio('response.mp3'))
-            message.guild.voice_client.play(source, after=lambda e: logger.error(f'Player error: {e}') if e else None)
-            while message.guild.voice_client.is_playing():
-                await asyncio.sleep(1)
+            tts = gTTS(text_response, tld='ca', lang='en')
+            audio_path = f"response-{message.id}.mp3"
+            tts.save(audio_path)
+            source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(audio_path))
+
+            def after_playing(e):
+                if e:
+                    logger.error(f'Player error: {e}')
+                os.remove(audio_path)
+
+            message.guild.voice_client.play(source, after=after_playing)
 
 async def setup(bot):
     await bot.add_cog(AIConvRoomCog(bot))
