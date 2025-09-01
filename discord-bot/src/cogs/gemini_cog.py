@@ -72,9 +72,10 @@ class GeminiCog(commands.Cog):
                 logger.info(f"Attempt {attempt + 1}: image_response: {image_response}")
 
                 if image_response.images:  # Check if any images were generated
-                    image_response[0].save(location="temp_image.png")
-                    await ctx.send(file=discord.File("temp_image.png"))
-                    os.remove("temp_image.png")  # Clean up the downloaded file
+                    image_path = f"temp_image_{ctx.message.id}.png"
+                    image_response[0].save(location=image_path)
+                    await ctx.send(file=discord.File(image_path))
+                    os.remove(image_path)  # Clean up the downloaded file
                     break
             else:
                 await ctx.send("Failed to generate images after 3 attempts.")
