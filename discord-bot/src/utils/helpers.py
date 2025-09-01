@@ -83,7 +83,7 @@ async def gemini_image(ctx, model, bucket_name, prompt: str = None, dont_modify_
         async with aiohttp.ClientSession() as session:
             async with session.get(image_link[0]) as response:
                 if response.status == 200:
-                    image_path = f"temp_image.{image_link[1].split('/')[-1]}"
+                    image_path = f"temp_image_{ctx.message.id}.{image_link[1].split('/')[-1]}"
                     with open(image_path, 'wb') as f:
                         f.write(await response.read())
                 else:
