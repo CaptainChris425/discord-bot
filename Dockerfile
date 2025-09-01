@@ -11,8 +11,7 @@ RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Pre-requisites
-RUN apt-get update && apt-get install -y
-RUN apt-get install -y curl
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 RUN curl -sSL https://sdk.cloud.google.com | bash
 
 # Copy the rest of the application code into the container
