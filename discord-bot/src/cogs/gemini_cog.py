@@ -64,7 +64,7 @@ class GeminiCog(commands.Cog):
             for attempt in range(3):  # Retry up to 3 times
                 image_response = self.image_model.generate_images(
                     prompt=prompt,
-                    number_of_images=3,
+                    number_of_images=1,
                     language="en",
                     aspect_ratio="1:1",
                     safety_filter_level="block_some",
