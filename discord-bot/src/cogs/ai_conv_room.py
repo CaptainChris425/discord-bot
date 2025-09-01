@@ -136,7 +136,7 @@ class AIConvRoomCog(commands.Cog):
 
             logger.info(f"Selected bot: {selected_bot}")
 
-            await asyncio.sleep(10)  # Pause for 2 seconds before responding
+            await asyncio.sleep(10)  # Pause for 10 seconds before responding
 
             ctx = await self.bot.get_context(message)
             text_response = await process_and_generate_response(ctx, self.model, self.bucket_name, full_prompt, dont_modify_prompt=True)
