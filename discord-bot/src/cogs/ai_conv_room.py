@@ -27,7 +27,7 @@ class AIConvRoomCog(commands.Cog):
         self.bucket_name = os.getenv('GCS_BUCKET_NAME')
         self.model = GenerativeModel("gemini-1.5-flash-002")
         self.conversation_histories = {}
-        self.recived_first_message = False
+        self.received_first_message = False
         self.conv_session_active = False
         self.conv_voice_active = False
         self.number_of_messages_to_track = 20
@@ -69,7 +69,7 @@ class AIConvRoomCog(commands.Cog):
         """Turns the conv session off."""
         logger.info(f"{ctx.author} called the ai-conv command")
         self.conv_session_active = False
-        self.recived_first_message = False
+        self.received_first_message = False
         status = "stopped"
         await ctx.send(f"conv session {status}.")
     @commands.command(name='ai-conv-voice')
@@ -95,8 +95,8 @@ class AIConvRoomCog(commands.Cog):
         """Event listener that triggers when a message is sent in a channel."""
         logger.info(f"Message received in channel: {message.channel.name}, content: {message.content}, author: {message.author.name}")
 
-        if not self.recived_first_message:
-            self.recived_first_message = True
+        if not self.received_first_message:
+            self.received_first_message = True
             self.conv_session_active = True
         else:
             if message.author != self.bot.user:
