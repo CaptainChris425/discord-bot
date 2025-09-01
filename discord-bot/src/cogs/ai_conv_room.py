@@ -11,7 +11,6 @@ from gtts import gTTS
 from google.cloud import storage, vision
 import logging
 import random
-from typing import Optional
 from utils.helpers import process_and_generate_response
 
 # Configure logging
@@ -73,7 +72,7 @@ class AIConvRoomCog(commands.Cog):
         status = "stopped"
         await ctx.send(f"conv session {status}.")
     @commands.command(name='ai-conv-voice')
-    async def conv_voice(self, ctx, *, prompt: Optional[str] = None):
+    async def conv_voice(self, ctx, *, prompt: str = ""):
         """Main command to interact with the Gemini Vertex AI API in a voice conv session."""
         logger.info(f"{ctx.author} called the ai-conv-voice command with prompt: {prompt}")
         self.conv_voice_active = not self.conv_voice_active

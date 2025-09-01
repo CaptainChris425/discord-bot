@@ -39,7 +39,7 @@ class GeminiCog(commands.Cog):
         return True
 
     @commands.command(name='ai')
-    async def gemini(self, ctx, *, prompt: str = None):
+    async def gemini(self, ctx, *, prompt: str = ""):
         """Main command to interact with the Gemini Vertex AI API"""
         logger.info(f"{ctx.author} called the gemini command with prompt: {prompt}")
         if not self.check_debug_mode(ctx):
@@ -54,7 +54,7 @@ class GeminiCog(commands.Cog):
             await ctx.send(f"Error: {str(e)}")
 
     @commands.command(name='imgen')
-    async def imgen(self, ctx, *, prompt: str = None):
+    async def imgen(self, ctx, *, prompt: str = ""):
         """Generates an image based on the given prompt using ImageGenerationModel"""
         logger.info(f"{ctx.author} called the imgen command with prompt: {prompt}")
         if not self.check_debug_mode(ctx):
