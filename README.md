@@ -107,10 +107,6 @@
   - Safe search detection
   - Processing image, video, and document attachments
  
- ## Contributing
- 
- Feel free to fork the repository and submit pull requests for any improvements or features you would like to add.
- 
  ## License
  
  This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -124,6 +120,9 @@
  ---
  
  ### Contributing
+
+ Feel free to fork the repository and submit pull requests for any improvements or features you would like to add.
+
  When contributing to this project, please ensure:
  
  *   Your code adheres to the project's coding standards.
