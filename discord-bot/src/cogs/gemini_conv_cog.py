@@ -191,7 +191,7 @@ class GeminiConvCog(commands.Cog):
             text_response = await process_and_generate_response(ctx, self.model, self.bucket_name, full_prompt, dont_modify_prompt=True)
             
             while text_response.startswith("cool-ai-man:"):
-                text_response = text_response.replace("cool-ai=man:","")
+                text_response = text_response.replace("cool-ai-man:","")
             await message.channel.send(text_response)
 
             # If voice chat is active, play the response in the voice channel
