@@ -7,7 +7,7 @@ class Greetings(commands.Cog):
         self._last_member = None
 
     @commands.command(name='hello')
-    async def hello(self, ctx, *, member: discord.Member = None):
+    async def hello(self, ctx, *, member: discord.Member):
         """Responds with a greeting"""
         print(f'ctx.author: {ctx.author}, command is: {ctx.command}')
         member = member or ctx.author
