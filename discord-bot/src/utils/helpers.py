@@ -31,7 +31,7 @@ def detect_safe_search_uri(uri):
     image = vision.Image()
     image.source.image_uri = uri
 
-    response = client.safe_search_detection(image=image)
+    response = client.safe_search_detection(image=image) # type: ignore
     safe = response.safe_search_annotation
 
     # Names of likelihood from google.cloud.vision.enums
@@ -57,7 +57,7 @@ def detect_safe_search_uri(uri):
             "https://cloud.google.com/apis/design/errors".format(response.error.message)
         )
 
-async def gemini_image(ctx, model, bucket_name, prompt: str = None, dont_modify_prompt: bool = False):
+async def gemini_image(ctx, model, bucket_name, prompt: str = '', dont_modify_prompt: bool = False):
     """Interacts with the Gemini Vertex AI API for images"""
     logger.info(f"{ctx.author} called the gemini_image function with prompt: {prompt}")
     if ctx.message is None:
@@ -87,6 +87,7 @@ async def gemini_image(ctx, model, bucket_name, prompt: str = None, dont_modify_
                     with open(image_path, 'wb') as f:
                         f.write(await response.read())
                 else:
+                    logger.error(f"Failed to download image from {image_link[0]}. Status: {response.status}")
                     return "Failed to download the image."
 
         # Upload the image file to Google Cloud Storage
@@ -94,28 +95,33 @@ async def gemini_image(ctx, model, bucket_name, prompt: str = None, dont_modify_
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(os.path.basename(image_path))
         blob.upload_from_filename(image_path)
+        logger.info(f"Uploaded {image_path} to GCS bucket {bucket_name} as {blob.name}")
         gcs_uri = f"gs://{bucket_name}/{blob.name}"
 
         # Use the GCS URI with Vertex AI
         image_file = Part.from_uri(gcs_uri, image_link[1])
         if dont_modify_prompt:
-            custom_instructions = prompt
+            custom_instructions = prompt + '.. Image is attached.'
         else:
             if prompt:
-                custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} { prompt}")
+                custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} : {prompt}")
             else:
                 custom_instructions = INSTRUCTIONS['image']
+        logger.info(f"Custom instructions for image processing: {custom_instructions}")
         response = model.generate_content([image_file, custom_instructions]).text
+        logger.info(f"Generated content for image: {response}")
 
         # Clean up the downloaded file and delete from GCS
         os.remove(image_path)
         blob.delete()
+        logger.info(f"Cleaned up temporary image file {image_path} and deleted {blob.name} from GCS.")
 
         return response
     except Exception as e:
+        logger.error(f"Error processing image: {str(e)}")
         return f"Error: {str(e)}"
 
-async def gemini_video(ctx, model, bucket_name, prompt: str = None, dont_modify_prompt: bool = False):
+async def gemini_video(ctx, model, bucket_name, prompt: str = '', dont_modify_prompt: bool = False):
     """Interacts with the Gemini Vertex AI API for videos"""
     logger.info(f"{ctx.author} called the gemini_video function with prompt: {prompt}")
     if ctx.message is None:
@@ -157,7 +163,7 @@ async def gemini_video(ctx, model, bucket_name, prompt: str = None, dont_modify_
         # Use the GCS URI with Vertex AI
         video_file = Part.from_uri(gcs_uri, video_link[1])
         if dont_modify_prompt:
-            custom_instructions = prompt
+            custom_instructions = prompt + '.. Video is attached.'
         else:
             if prompt:
                 custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} { prompt}")
@@ -173,7 +179,7 @@ async def gemini_video(ctx, model, bucket_name, prompt: str = None, dont_modify_
     except Exception as e:
         return f"Error: {str(e)}"
 
-async def gemini_document(ctx, model, prompt: str = None, dont_modify_prompt: bool = False):
+async def gemini_document(ctx, model, prompt: str = '', dont_modify_prompt: bool = False):
     """Interacts with the Gemini Vertex AI API for documents"""
     logger.info(f"{ctx.author} called the gemini_document function with prompt: {prompt}")
     if ctx.message is None:
@@ -197,7 +203,7 @@ async def gemini_document(ctx, model, prompt: str = None, dont_modify_prompt: bo
     try:
         document_file = Part.from_uri(document_link[0], document_link[1])
         if dont_modify_prompt:
-            custom_instructions = prompt
+            custom_instructions = prompt + '.. Document is attached.'
         else:
             if prompt:
                 custom_instructions = INSTRUCTIONS.get(prompt, f"{INSTRUCTIONS['freeform']} {prompt}")
@@ -208,7 +214,7 @@ async def gemini_document(ctx, model, prompt: str = None, dont_modify_prompt: bo
     except Exception as e:
         return f"Error: {str(e)}"
 
-async def process_and_generate_response(ctx, model, bucket_name, prompt: str = None, dont_modify_prompt: bool = False):
+async def process_and_generate_response(ctx, model, bucket_name, prompt: str = '', dont_modify_prompt: bool = False):
     """Processes attachments and generates a response using the Gemini Vertex AI API"""
     # Check for image, video, or document links
     image_links = [(attachment.url, attachment.content_type) for attachment in ctx.message.attachments if attachment.content_type and attachment.content_type.startswith('image/')]
@@ -216,10 +222,13 @@ async def process_and_generate_response(ctx, model, bucket_name, prompt: str = N
     document_links = [(attachment.url, attachment.content_type) for attachment in ctx.message.attachments if attachment.content_type and (attachment.content_type.startswith('application/pdf') or attachment.content_type.startswith('text/plain'))]
 
     if image_links:
+        logger.info(f"{ctx.author} has sent an image attachment. Proccessing...")
         return await gemini_image(ctx, model, bucket_name, prompt=prompt, dont_modify_prompt=dont_modify_prompt)
     if video_links:
+        logger.info(f"{ctx.author} has sent a video attachment. Proccessing...")
         return await gemini_video(ctx, model, bucket_name, prompt=prompt, dont_modify_prompt=dont_modify_prompt)
     if document_links:
+        logger.info(f"{ctx.author} has sent a document attachment. Proccessing...")
         return await gemini_document(ctx, model, prompt=prompt, dont_modify_prompt=dont_modify_prompt)
 
     # If no attachments, proceed with text prompt
